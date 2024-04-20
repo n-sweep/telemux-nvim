@@ -66,7 +66,7 @@ local function process_lines(lines, filetype)
 
         -- flag to remove commented lines
         -- [TODO] change comments per filetype (?)
-         local comment = string.match(str, '^#')
+         local comment = string.match(str, '^%s*#')
         -- flag to remove empty lines
          local empty = string.match(str, "^%s*$")
 
@@ -133,6 +133,19 @@ local function get_lines(selection, delimiter)
 end
 
 
+local function execute_lines(lines)
+    for _, text in ipairs(lines) do
+        -- convert text into a tmux send-keys command
+        local command = generate_command(text, 'l')
+        -- send command text
+        vim.cmd(command)
+        -- send carriage return
+        vim.cmd(generate_command('Enter'))
+
+    end
+end
+
+
 -- attach to pane by id
 function M.attach_to_pane()
     local p = ''
@@ -143,19 +156,6 @@ function M.attach_to_pane()
     until PANE_ID ~= ''
     vim.cmd('redraw')
     print('Attached to pane ' .. p .. ' (' .. PANE_ID .. ')')
-end
-
-
-function execute_lines(lines)
-    for _, text in ipairs(lines) do
-        -- convert text into a tmux send-keys command
-        local command = generate_command(text, 'l')
-        -- send command text
-        vim.cmd(command)
-        -- send carriage return
-        vim.cmd(generate_command('Enter'))
-
-    end
 end
 
 
