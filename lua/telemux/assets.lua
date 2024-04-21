@@ -1,9 +1,18 @@
 local vim = vim
 local M = {}
 local filetypes = {
-    python = '# %%',
-    markdown = '```',
-    quarto = '```'
+    python = {
+        delimiter = '# %%',
+        comment = '#',
+    },
+    markdown = {
+        delimiter = '```',
+        comment = '#',
+    },
+    quarto = {
+        delimiter = '```',
+        comment = '#', -- [TODO] is this right?
+    }
 }
 
 PANE_ID = ''
@@ -41,7 +50,7 @@ local function get_tmux_pane_num(id)
 end
 
 
--- Execute the results of a motion in the previous pane
+-- generate tmux send-keys command
 local function generate_command(keys, flags)
     flags = flags or ''
     local pane = get_tmux_pane_num(PANE_ID)
@@ -52,7 +61,7 @@ end
 local function process_text(text)
     -- escape special characters before sending the command to vim
     -- gotta sub the escape char first \\
-    for _, k in ipairs({ '\\', '%%', '"', '!', '#', '%$' }) do
+    for _, k in ipairs({ '\\', '%%', '"', '!', '#', '%$', '`' }) do
         text = text:gsub(k, '\\' .. k)
     end
     -- surround with quotes before sending the command to vim
@@ -61,12 +70,14 @@ end
 
 
 local function process_lines(lines, filetype)
+    local comment_char = filetypes[filetype]['comment']
     local output = {}
+
     for _, str in ipairs(lines) do
 
         -- flag to remove commented lines
-        -- [TODO] change comments per filetype (?)
-         local comment = string.match(str, '^%s*#')
+         local comment = string.match(str, '^%s*' .. comment_char)
+
         -- flag to remove empty lines
          local empty = string.match(str, "^%s*$")
 
@@ -77,28 +88,51 @@ local function process_lines(lines, filetype)
 
     end
 
-    local indented = string.match(output[#output], "^\"[%s\t]+") ~= nil
-    if filetype == 'python' and indented then
-        -- adding two empty lines to close an indented block
-        table.insert(output, "")
+    if filetype == 'python' and #output > 0 then
+        if string.match(output[#output], "^\"[%s\t]+") ~= nil then
+            -- adding two empty lines to close an indented block
+            table.insert(output, "")
+        end
     end
 
     return output
 end
 
 
-local function get_lines_within_cell(div)
+local function get_current_cell(div)
     -- find cell divider above cursor
-    local cstart = vim.fn.search(div, 'nb') + 1
-    -- find cell divider below cursor
-    local cend = vim.fn.search(div, 'n') - 1
+    if vim.fn.getline("."):find(div) ~= nil then
+        return vim.api.nvim_win_get_cursor(0)[1]
+    else
+        return vim.fn.search(div, 'nbW')
+    end
+end
 
-    -- if cend wraps around, replace with -1
-    if cstart >= cend then
-        cend = -1
+
+local function get_next_cell(div)
+    return vim.fn.search(div, 'nW')
+end
+
+
+local function goto_next_cell(div)
+    vim.api.nvim_win_set_cursor(0, {get_next_cell(div), 0})
+end
+
+
+local function get_lines_within_cell(div)
+
+    -- find cell divider above cursor
+    local cstart = get_current_cell(div)
+
+    -- find cell divider below cursor
+    local cend = get_next_cell(div)
+
+    -- if cend is zero (last cell), replace with the end of the buffer
+    if cend < 1 then
+        cend = vim.fn.line("$")
     end
 
-    return vim.fn.getline(cstart, cend)
+    return vim.fn.getline(cstart + 1, cend - 1)
 end
 
 
@@ -117,9 +151,6 @@ end
 
 
 local function get_lines(selection, delimiter)
-    -- [TODO] unable to run cells at the end of file (?)
-    -- [TODO] unable to run code blocks with one line (?)
-
     -- prioritize selection first
     if selection then
         return get_selected_lines()
@@ -141,19 +172,20 @@ local function execute_lines(lines)
         vim.cmd(command)
         -- send carriage return
         vim.cmd(generate_command('Enter'))
-
     end
 end
 
 
 -- attach to pane by id
 function M.attach_to_pane()
-    local p = ''
+    local p = nil
     repeat
         vim.cmd('silent !tmux display-panes -Nbd 0')
-        p = vim.fn.input('Attach to pane: ')
+        print('Attach to pane')
+        local n = vim.fn.getchar()
+        p = vim.fn.nr2char(n)
         PANE_ID = get_tmux_pane_id(p)
-    until PANE_ID ~= ''
+    until PANE_ID ~= nil
     vim.cmd('redraw')
     print('Attached to pane ' .. p .. ' (' .. PANE_ID .. ')')
 end
@@ -167,13 +199,13 @@ function M.ipython()
         'clear'
     }
 
-    execute_lines(process_lines(tbl))
+    execute_lines(process_lines(tbl, 'python'))
 end
 
 
-function M.send_keys(selection)
+function M.send_keys(selection, cell_increment)
     local filetype = vim.bo.filetype
-    local delimiter = filetypes[filetype]
+    local delimiter = filetypes[filetype]['delimiter']
 
     if PANE_ID == '' then
         M.attach_to_pane()
@@ -188,6 +220,10 @@ function M.send_keys(selection)
     if selection then
         -- exit select mode
         vim.api.nvim_input('<Esc>')
+    end
+
+    if cell_increment then
+        goto_next_cell(delimiter)
     end
 
 end
