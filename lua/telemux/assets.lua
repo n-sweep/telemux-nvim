@@ -114,8 +114,9 @@ local function get_next_cell(div)
 end
 
 
-local function goto_next_cell(div)
-    vim.api.nvim_win_set_cursor(0, {get_next_cell(div), 0})
+local function get_prev_cell(div)
+    local l = get_current_cell(div)
+    return vim.fn.search(div, 'nW', l - 1)
 end
 
 
@@ -150,9 +151,9 @@ local function get_selected_lines()
 end
 
 
-local function get_lines(selection, delimiter)
-    -- prioritize selection first
-    if selection then
+local function get_lines(select_mode, delimiter)
+    -- prioritize selections first
+    if select_mode then
         return get_selected_lines()
     -- if in a supported file, return the whole cell
     elseif delimiter then
@@ -165,6 +166,11 @@ end
 
 
 local function execute_lines(lines)
+
+    if PANE_ID == '' then
+        M.attach_to_pane()
+    end
+
     for _, text in ipairs(lines) do
         -- convert text into a tmux send-keys command
         local command = generate_command(text, 'l')
@@ -176,22 +182,53 @@ local function execute_lines(lines)
 end
 
 
+function M.goto_next_cell(div)
+    vim.api.nvim_win_set_cursor(0, {get_next_cell(div), 0})
+end
+
+
+function M.goto_prev_cell(div)
+    vim.api.nvim_win_set_cursor(0, {get_prev_cell(div), 0})
+end
+
+
 -- attach to pane by id
 function M.attach_to_pane()
-    local p = nil
+    local char = nil
+    local current_id = PANE_ID
+
+    print('Enter pane # to attach')
     repeat
         vim.cmd('silent !tmux display-panes -Nbd 0')
-        print('Attach to pane')
-        local n = vim.fn.getchar()
-        p = vim.fn.nr2char(n)
-        PANE_ID = get_tmux_pane_id(p)
-    until PANE_ID ~= nil
-    vim.cmd('redraw')
-    print('Attached to pane ' .. p .. ' (' .. PANE_ID .. ')')
+
+        char = vim.fn.nr2char(vim.fn.getchar())
+        local id = get_tmux_pane_id(char)
+
+        if id == nil then
+            if char:byte(1,2) == 27 or char == 'q' then
+                break
+            else
+                print(char .. ' is not a valid pane')
+                PANE_ID = ''
+            end
+        else
+            PANE_ID = id
+            print('Attached to pane ' .. char .. ' (' .. PANE_ID .. ')')
+        end
+
+    until PANE_ID ~= current_id
+
+
+end
+
+
+function M.unattach_from_pane()
+    PANE_ID = ''
 end
 
 
 function M.ipython()
+
     local tbl = {
         'ipython --no-autoindent',
         '%load_ext autoreload',
@@ -203,27 +240,21 @@ function M.ipython()
 end
 
 
-function M.send_keys(selection, cell_increment)
+function M.send_keys()
+    local mode = vim.api.nvim_get_mode()['mode']
+    local select = mode == 's'
     local filetype = vim.bo.filetype
     local delimiter = filetypes[filetype]['delimiter']
 
-    if PANE_ID == '' then
-        M.attach_to_pane()
-    end
-
     -- get lines to be sent to vim
-    local lines = get_lines(selection, delimiter)
+    local lines = get_lines(select, delimiter)
     local processed_lines = process_lines(lines, filetype)
 
     execute_lines(processed_lines)
 
-    if selection then
+    if select then
         -- exit select mode
         vim.api.nvim_input('<Esc>')
-    end
-
-    if cell_increment then
-        goto_next_cell(delimiter)
     end
 
 end

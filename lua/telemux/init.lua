@@ -24,4 +24,5 @@ function TelemuxStart()
 end
 
 
-vim.keymap.set('n', '<leader>ta', function() TelemuxStart() end)
+vim.keymap.set('n', '<leader>tta', function() TelemuxStart() end)
+vim.keymap.set('n', '<leader>ttp', function() TelemuxStart().ipython() end)
