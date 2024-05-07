@@ -18,6 +18,12 @@ local filetypes = {
 PANE_ID = ''
 
 
+local function get_current_delimiter()
+    local filetype = vim.bo.filetype
+    return filetypes[filetype]['delimiter']
+end
+
+
 local function tmux_list_panes()
     -- read the output of tmux list-panes
     local f = io.popen("tmux list-panes")
@@ -70,6 +76,10 @@ end
 
 
 local function process_lines(lines, filetype)
+    if filetype == nil then
+        filetype = vim.bo.filetype
+    end
+
     local comment_char = filetypes[filetype]['comment']
     local output = {}
 
@@ -115,8 +125,11 @@ end
 
 
 local function get_prev_cell(div)
-    local l = get_current_cell(div)
-    return vim.fn.search(div, 'nW', l - 1)
+    local current_pos = vim.api.nvim_win_get_cursor(0)
+    vim.api.nvim_win_set_cursor(0, {get_current_cell(div), 0})
+    local prev_cell_line = vim.fn.search(div, 'nbW')
+    vim.api.nvim_win_set_cursor(0, current_pos)
+    return prev_cell_line
 end
 
 
@@ -151,7 +164,8 @@ local function get_selected_lines()
 end
 
 
-local function get_lines(select_mode, delimiter)
+local function get_lines(select_mode)
+    local delimiter = get_current_delimiter()
     -- prioritize selections first
     if select_mode then
         return get_selected_lines()
@@ -182,12 +196,14 @@ local function execute_lines(lines)
 end
 
 
-function M.goto_next_cell(div)
+function M.goto_next_cell()
+    local div = get_current_delimiter()
     vim.api.nvim_win_set_cursor(0, {get_next_cell(div), 0})
 end
 
 
-function M.goto_prev_cell(div)
+function M.goto_prev_cell()
+    local div = get_current_delimiter()
     vim.api.nvim_win_set_cursor(0, {get_prev_cell(div), 0})
 end
 
@@ -243,11 +259,9 @@ end
 function M.send_keys()
     local mode = vim.api.nvim_get_mode()['mode']
     local select = mode == 's'
-    local filetype = vim.bo.filetype
-    local delimiter = filetypes[filetype]['delimiter']
 
     -- get lines to be sent to vim
-    local lines = get_lines(select, delimiter)
+    local lines = get_lines(select)
     local processed_lines = process_lines(lines, filetype)
 
     execute_lines(processed_lines)

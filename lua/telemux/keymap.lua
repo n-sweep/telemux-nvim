@@ -6,15 +6,17 @@ function M.setup(mod)
     vim.keymap.set('n', '<leader>ttp', function() mod.ipython() end)
 
     -- send keys
-    -- ctrl + enter
-    vim.keymap.set('n', '<F33>', function() mod.send_keys() end)
-    vim.keymap.set('i', '<F33>', function() mod.send_keys() end)
-    vim.keymap.set('v', '<F33>', function() mod.send_keys() end)
+    -- ctrl + enter runs a cell
+    vim.keymap.set({'n', 'v'}, '<F33>', function() mod.send_keys() end)
 
-    -- shift + enter
-    vim.keymap.set('n', '<F34>', function() mod.send_keys() mod.goto_next_cell() end)
-    vim.keymap.set('i', '<F34>', function() mod.send_keys() mod.goto_next_cell() end)
-    vim.keymap.set('v', '<F34>', function() mod.send_keys() mod.goto_next_cell() end)
+    -- shift + enter runs a cell and sends the cursor to the next cell
+    vim.keymap.set({'n', 'v'}, '<F34>', function() mod.send_keys() mod.goto_next_cell() end)
+
+    -- shift + tab
+    vim.keymap.set('n', '<F31>', function() mod.goto_next_cell() end)
+
+    -- alt + tab
+    vim.keymap.set('n', '<F32>', function() mod.goto_prev_cell() end)
 
 end
 
