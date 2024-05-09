@@ -258,7 +258,7 @@ end
 
 function M.send_keys()
     local mode = vim.api.nvim_get_mode()['mode']
-    local select = mode == 's'
+    local select = mode == 'v' or mode == 'V' or mode == '^V'
 
     -- get lines to be sent to vim
     local lines = get_lines(select)
