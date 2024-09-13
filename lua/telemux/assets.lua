@@ -12,6 +12,10 @@ local filetypes = {
     quarto = {
         delimiter = '```',
         comment = '#', -- [TODO] is this right?
+    },
+    sh = {
+        delimiter = nil,
+        comment = '#', -- [TODO] is this right?
     }
 }
 
@@ -19,8 +23,11 @@ PANE_ID = ''
 
 
 local function get_current_delimiter()
-    local filetype = vim.bo.filetype
-    return filetypes[filetype]['delimiter']
+    local filetype = filetypes[vim.bo.filetype]
+    if filetype ~= nil then
+        return filetype['delimiter']
+    end
+    return nil
 end
 
 
@@ -262,7 +269,7 @@ function M.send_keys()
 
     -- get lines to be sent to vim
     local lines = get_lines(select)
-    local processed_lines = process_lines(lines, filetype)
+    local processed_lines = process_lines(lines, vim.bo.filetype)
 
     execute_lines(processed_lines)
 
